@@ -1,41 +1,62 @@
-Note: The build process of converting the linux image is wildly inefficent and heavy on system memory so it is highly recommended to make the image as small as possible. 
-The resulting binary uses BASE64 conversion for Linux Images which is not stable or suitable for large images.
-This build process is currently a proof of concept based off of the following repos and is expected to change as development continues.
-
 Based on TinyEmu (Mini Qemu) / v86:
 Fabrice Bellard is the developer of QEMU and TinyEMU which is an experimental JS port of QEMU
 
 https://bellard.org/tinyemu/ - JS QEMU Engine
+
 https://github.com/killinux/jslinux-bellard - Web hosted JS QEMU x86 VM Client Proof-of-Concept
+
 https://github.com/copy/v86 - Web hosted JS QEMU x86 VM Client
+
 https://github.com/superdinmc/v86-NodeVM - Node Integration demo for JS Qemu x86 VM
 
 [Build Requirements]
-Java - https://www.java.com/en/download/
-NPM - https://www.java.com/en/download
+
+Java - https://www.java.com/en/download/ | jre-openjdk
+
+NPM - https://www.java.com/en/download | npm
+
 Bash - via native Linux Shell, or Windows Subsystem for Linux
-Node.js - https://nodejs.org/en/download/current
+
+Node.js - https://nodejs.org/en/download/current | nodejs
+
 google-closure-compiler - https://github.com/google/closure-compiler | npm i -g google-closure-compiler
 
+QEMU - https://www.qemu.org/ | qemu qemu-img
+
 [Dependencies]
+
 Place the following binaries in this directory, and run "bash build.sh" to build VM.js:
 
-libv86.js https://github.com/copy/v86/releases/tag/latest
-v86.wasm https://github.com/copy/v86/releases/tag/latest
-seabios.bin https://github.com/copy/v86/blob/master/bios/seabios.bin
-linuxiso 
+libv86.js
+https://github.com/copy/v86/releases/tag/latest
+
+v86.wasm
+https://github.com/copy/v86/releases/tag/latest
+
+seabios.bin
+https://github.com/copy/v86/blob/master/bios/seabios.bin
+
+linux.img (Linux QEMU generated Raw Virtual Hard Disk)
+https://qemu-project.gitlab.io/qemu/tools/qemu-img.html
+
+Note: The Linux Installation should output to ttyS0 on login.
+It is recommended this virtual disk also use a syslinux bootloader with SERIAL output and console=ttyS0 passed on the kernel parameter. Otherwise the console will hang at please wait.
 
 [Xbox Deployment Execution]
+
 Download Node.js for windows binary (.zip) and extract the directory to Xbox.
+
 Copy the generated VM.js in the same directory next to node.exe on Xbox.
-SSH into Xbox and run "node VM"
 
-[Creating LinuxISO]
-LinuxISO can be generated via the following instructions. The resulting .img or .iso must be renamed to "linuxiso" for build script.
-In this example, we would use the resulting arch.img and rename it to "linuxiso".
+SSH into Xbox and run "node linux"
 
+[Creating linux.img]
+
+
+This document partly also applies to other Linux distros
+MANY items in this example document have been modified for node usage for the Xbox.
+The original document can be found here for reference.
 https://github.com/copy/v86/blob/master/docs/archlinux.md
-(This document partly also applies to other Linux distros)
 
 Choosing an installer ISO
 -------------------------
@@ -162,95 +183,57 @@ echo "Mount the package cache dir in memory so it doesn't fill up the image"
 mount -t tmpfs none /mnt/var/cache/pacman/pkg
 
 echo "Updating archlinux-keyring"
-pacman -Sy archlinux-keyring --noconfirm
 
-# uncomment to remove signing if unable to resolve signing errors
 sed -i 's/SigLevel.*/SigLevel = Never/g' /etc/pacman.conf
+pacman -Sy archlinux-keyring archlinux32-keyring archlinux-keyring
+pacman-key --init
+pacman-key --populate archlinux32
+pacman-key --populate archlinux
+pacman-key --refresh
 
 # Install the Arch Linux base system, feel free to add packages you need here
 echo "Performing pacstrap"
-pacstrap -i /mnt base linux dhcpcd curl openssh --noconfirm
+pacstrap -i /mnt base linux dhcpcd curl openssh neofetch base-devel --noconfirm
 
 echo "Writing fstab"
 genfstab -p /mnt >> /mnt/etc/fstab
 
 # When the Linux boots we want it to automatically log in on tty1 as root
-echo "Ensuring root autologin on tty1"
+echo "Ensuring root autologin"
+mkdir -p /mnt/etc/systemd/system/getty@ttyS0.service.d
 mkdir -p /mnt/etc/systemd/system/getty@tty1.service.d
 cat << 'EOF' > /mnt/etc/systemd/system/getty@tty1.service.d/override.conf
 [Service]
 ExecStart=
 ExecStart=-/usr/bin/agetty --autologin root --noclear %I $TERM
 EOF
-
-# This is the tricky part. The current root will be mounted on /dev/sda1 but after we reboot
-# it will try to mount root during boot using the 9p network filesystem. This means the emulator
-# will request all files over the network using XMLHttpRequests from the server. This is great
-# because then you only need to provide the client with a saved state (the memory) and the
-# session will start instantly and load needed files on the fly. This is fast and it saves bandwidth.
-echo "Ensuring root is remounted using 9p after reboot"
-mkdir -p /mnt/etc/initcpio/hooks
-cat << 'EOF' > /mnt/etc/initcpio/hooks/9p_root
-run_hook() {
-    mount_handler="mount_9p_root"
-}
-
-mount_9p_root() {
-    msg ":: mounting '$root' on real root (9p)"
-    # Note the host9p. We won't mount /dev/sda1 on root anymore,
-    # instead we mount the network filesystem and the emulator will
-    # retrieve the files on the fly.
-    if ! mount -t 9p host9p "$1"; then
-        echo "You are now being dropped into an emergency shell."
-        launch_interactive_shell
-        msg "Trying to continue (this will most likely fail) ..."
-    fi
-}
+cat << 'EOF' > /mnt/etc/systemd/system/getty@ttyS0.service.d/override.conf
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty -o '-p -f -- \\u' --keep-baud --autologin root 115200,57600,38400,9600 - $TERM
 EOF
-
-echo "Adding initcpio build hook for 9p root remount"
-mkdir -p /mnt/etc/initcpio/install
-cat << 'EOF' > /mnt/etc/initcpio/install/9p_root
-#!/bin/bash
-build() {
-	add_runscript
-}
-EOF
-
-# We need to load some modules into the kernel for it to play nice with the emulator
-# The atkbd and i8042 modules are for keyboard input in the browser. If you do not
-# want to use the network filesystem you only need these. The 9p, 9pnet and 9pnet_virtio
-# modules are needed for being able to mount 9p network filesystems using the emulator.
-echo "Configure mkinitcpio for 9p"
-sed -i 's/MODULES=()/MODULES=(atkbd i8042 libps2 serio serio_raw psmouse virtio_pci virtio_pci_modern_dev 9p 9pnet 9pnet_virtio fscache netfs)/g' /mnt/etc/mkinitcpio.conf
-
-# Because we want to mount the root filesystem over the network during boot, we need to
-# hook into initcpio. If you do not want to mount the root filesystem during boot but
-# only want to mount a 9p filesystem later, you can leave this out. Once the system
-# has been booted you should be able to mount 9p filesystems with mount -t 9p host9p /blabla
-# without this hook.
-sed -i 's/fsck"/fsck 9p_root"/g' /mnt/etc/mkinitcpio.conf
-
-# enable ssh password auth and root login
-sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/g' /etc/ssh/sshd_config
-sed -i 's/#PasswordAuthentication.*/PasswordAuthentication yes/g' /etc/ssh/sshd_config
 
 echo "Writing the installation script"
+
 cat << 'EOF' > /mnt/bootstrap.sh
 #!/usr/bin/bash
 echo "Re-generate initial ramdisk environment"
 mkinitcpio -p linux
 
-# uncomment to remove signing if you are unable to resolve signing errors otherwise
 sed -i 's/SigLevel.*/SigLevel = Never/g' /etc/pacman.conf
+pacman -Sy archlinux-keyring archlinux32-keyring archlinux-keyring
+pacman-key --init
+pacman-key --populate archlinux32
+pacman-key --populate archlinux
+pacman-key --refresh
 
 pacman -S --noconfirm syslinux gptfdisk
 syslinux-install_update -i -a -m
 
 # disabling ldconfig to speed up boot (to remove Rebuild dynamic linker cache...)
 # you may want to comment this out
-echo "Disabling ldconfig service"
-systemctl mask ldconfig.service
+#echo "Disabling ldconfig service"
+#systemctl mask ldconfig.service
 
 sync
 EOF
@@ -280,9 +263,9 @@ cat << 'EOF' > /mnt/boot/syslinux/syslinux.cfg
 # Please review the wiki: https://wiki.archlinux.org/index.php/Syslinux
 # The wiki provides further configuration examples
 
-DEFAULT arch
+DEFAULT archlinux
 PROMPT 0        # Set to 1 if you always want to display the boot: prompt
-TIMEOUT 100
+TIMEOUT 300
 
 # Menu Configuration
 # Either menu.c32 or vesamenu32.c32 must be copied to /boot/syslinux
@@ -290,236 +273,36 @@ UI menu.c32
 #UI vesamenu.c32
 
 # Refer to http://syslinux.zytor.com/wiki/index.php/Doc/menu
-MENU TITLE Arch Linux
+#MENU TITLE Arch Linux
 #MENU BACKGROUND splash.png
-MENU COLOR border       30;44   #40ffffff #a0000000 std
-MENU COLOR title        1;36;44 #9033ccff #a0000000 std
-MENU COLOR sel          7;37;40 #e0ffffff #20ffffff all
-MENU COLOR unsel        37;44   #50ffffff #a0000000 std
-MENU COLOR help         37;40   #c0ffffff #a0000000 std
-MENU COLOR timeout_msg  37;40   #80ffffff #00000000 std
-MENU COLOR timeout      1;37;40 #c0ffffff #00000000 std
-MENU COLOR msg07        37;40   #90ffffff #a0000000 std
-MENU COLOR tabmsg       31;40   #30ffffff #00000000 std
+#MENU COLOR border       30;44   #40ffffff #a0000000 std
+#MENU COLOR title        1;36;44 #9033ccff #a0000000 std
+#MENU COLOR sel          7;37;40 #e0ffffff #20ffffff all
+#MENU COLOR unsel        37;44   #50ffffff #a0000000 std
+#MENU COLOR help         37;40   #c0ffffff #a0000000 std
+#MENU COLOR timeout_msg  37;40   #80ffffff #00000000 std
+#MENU COLOR timeout      1;37;40 #c0ffffff #00000000 std
+#MENU COLOR msg07        37;40   #90ffffff #a0000000 std
+#MENU COLOR tabmsg       31;40   #30ffffff #00000000 std
 
-# boot sections follow
-#
-# TIP: If you want a 1024x768 framebuffer, add "vga=773" to your kernel line.
-#
-#-*
-
-LABEL arch
-    MENU LABEL Arch Linux 9p
+LABEL archlinux
+    MENU LABEL Arch Linux
+    SERIAL 0 115200
     LINUX ../vmlinuz-linux
-    APPEND root=/dev/sda1 rw quiet
+    APPEND root=/dev/sda1 rw nomodeset console=ttyS0,115200 loglevel=7
     INITRD ../initramfs-linux.img
 
-LABEL arch2
-    MENU LABEL Arch Linux Disk
-    LINUX ../vmlinuz-linux
-    APPEND root=/dev/sda1 rw quiet disablehooks=9p_root
-    INITRD ../initramfs-linux.img
+#LABEL hdt
+#        MENU LABEL HDT (Hardware Detection Tool)
+#        COM32 hdt.c32
 
-LABEL hdt
-        MENU LABEL HDT (Hardware Detection Tool)
-        COM32 hdt.c32
+#LABEL reboot
+#        MENU LABEL Reboot
+#        COM32 reboot.c32
 
-LABEL reboot
-        MENU LABEL Reboot
-        COM32 reboot.c32
-
-LABEL poweroff
-        MENU LABEL Poweroff
-        COM32 poweroff.c32
+#LABEL poweroff
+#        MENU LABEL Poweroff
+#        COM32 poweroff.c32
 EOF
 umount -R /mnt
 ```
-
-With the packer template and the script you have enough to create an image that can be booted by v86. But because this example script installs an Arch Linux that wants to mount root over the network with 9p, we need to host that filesystem first. If you do not want to use 9p, you can just run `(cd packer && packer build -force template.json)` to build the image.
-
-### Creating the 9p filesystem
-
-Now that we have an image that contains a filesystem, we can convert that filesystem into something we can host on the webserver together with the v86 library.
-
-To do so, we need to mount the image once and create a json mapping of the filesystem. The following script shows how to map the filesystem in an automated fashion.
-
-Create a script to builds the image and then creates v86 compatible artifacts:
-```sh
-vim build.sh
-```
-
-Example script:
-
-```sh
-#!/bin/sh
-
-SRC=packer
-TARGET=output
-
-# build the boxfile from the iso
-(cd $SRC && sudo PACKER_LOG=1 PACKER_LOG_PATH="./packer.log" packer build -force template.json)
-
-# test if there is a boxfile where we expected it
-if [ ! -f $SRC/output-qemu/archlinux ]; then
-    echo "Looks like something went wrong building the image, maybe try again?"
-    exit 1
-fi;
-
-# clean up any previous loops and mounts
-echo "Making sure mountpoint is empty"
-LOOP_DEV=$(sudo losetup -f)
-
-sudo umount diskmount -f || /bin/true
-sudo kpartx -d $LOOP_DEV || /bin/true
-sudo losetup -d $LOOP_DEV || /bin/true
-
-# mount the generated raw image, we do that so we can create
-# a json mapping of it and copy it to host on the webserver
-mkdir -p diskmount
-echo "Mounting the created image so we can convert it to a p9 image"
-sudo losetup $LOOP_DEV $SRC/output-qemu/archlinux
-sudo kpartx -a $LOOP_DEV
-sudo mount /dev/mapper/$(basename $LOOP_DEV)p1 diskmount
-
-# make images dir
-mkdir -p $TARGET
-mkdir -p $TARGET/images
-mkdir -p $TARGET/images/arch
-
-# map the filesystem to json with fs2json
-sudo ./tools/fs2json.py --out $TARGET/images/fs.json diskmount
-sudo ./tools/copy-to-sha256.py diskmount $TARGET/images/arch
-
-# copy the filesystem and chown to nonroot user
-echo "Copying the filesystem to $TARGET/arch"
-mkdir $TARGET/arch -p
-sudo rsync -q -av diskmount/ $TARGET/arch
-sudo chown -R $(whoami):$(whoami) $TARGET/arch
-
-# clean up mount
-echo "Cleaning up mounts"
-sudo umount diskmount -f
-sudo kpartx -d $LOOP_DEV
-sudo losetup -d $LOOP_DEV
-
-# Move the image to the images dir
-sudo mv $SRC/output-qemu/archlinux $TARGET/images/arch.img
-```
-
-Given that the packer template and provision.sh is rooted at `packer` (adjust the value of `$SRC` otherwise), run the `build.sh` at root of your `v86` repo:
-
-```
-chmod +x build.sh
-./build.sh
-```
-
-Generated artifacts are now available for serving from `output`.
-
-### Using the created artifacts in v86
-
-Now that we have everything we need to host a server that serves an Arch Linux environment over the network.
-
-Create a checkout of v86 and run `make build/libv86.js`.
-We can then edit `examples/arch.html`, we have two options:
-
-1. Boot Arch Linux from the 9p filesystem (generated .bin artifacts at `/output/images/arch`):
-
-  ```sh
-  filesystem: {
-    baseurl: "../output/images/arch/",
-    basefs: "../output/images/fs.json",
-  },
-
-  bzimage_initrd_from_filesystem: true,
-
-  cmdline: [
-    "rw",
-    "root=host9p rootfstype=9p rootflags=trans=virtio,cache=loose",
-  ].join(" "),
-
-  acpi: false,
-  autostart: true,
-  ```
-2. Boot the Arch Linux from the qemu raw disk image:
-
-  ```sh
-  hda: {
-      url: "../output/images/arch.img",
-      # set to true if you want to load it asynchrously during runtime (for this option we need to run a webserver that supports the Range header)
-      # NOTE: async: false is slow but proved to be more realiable
-      async: false,
-
-      # This needs to be the size of the raw disk.
-      size: 1.5 * 1024 * 1024 * 1024,
-      # See the `disk_size` item in the packer template.
-  },
-
-  acpi: false,
-  autostart: true,
-  ```
-
-Next, we need a webserver that supports the Range header. For example [this extension of the SimpleHTTPServer](https://github.com/smgoller/rangehttpserver). At your `v86` root, run:
-
-```sh
-wget https://raw.githubusercontent.com/smgoller/rangehttpserver/master/RangeHTTPServer.py
-python2 RangeHTTPServer.py
-```
-
-Now that the webserver is running, point your browser to `http://localhost:8000/examples/arch.html`. Wait for the Linux to boot. When the system is up, click 'Save state to file'. Your browser will download a `v86state.bin` file. Copy that file to `/your/v86/dir/images`. You can then edit `examples/arch.html` again and add a 'state' key to the `V86` array.
-
-```sh
-initial_state: {
-    "url": "http://localhost:8000/images/v86state.bin",
-},
-```
-
-If you refresh `http://localhost:8000/examples/arch.html` you will see that the state is restored instantly and all required files are loaded over the network on the fly.
-
-### Networking
-
-The emulator can emulate a network card. For more information [look at the networking documentation](https://github.com/copy/v86/blob/master/docs/networking.md). To set up networking in the VM, add the following item to the `V86` array in the `examples/arch.html` file:
-```sh
-network_relay_url: "ws://localhost:8080/",
-```
-
-This will make the emulator try to connect to a [WebSockets proxy](https://github.com/benjamincburns/websockproxy). Running the proxy is very easy if you use the Docker container.
-
-```sh
-sudo docker run --privileged -p 8080:80 --name relay bennottelling/websockproxy
-```
-**NOTE:** original `benjamincburns/jor1k-relay:latest` has throttling built-in by default which will degrade the networking. `bennottelling/websockproxy` has this throttling removed via [websockproxy/issues/4#issuecomment-317255890](https://github.com/benjamincburns/websockproxy/issues/4#issuecomment-317255890).
-
-You can check if the relay is running correctly by going to `http://localhost:8080/` in your browser. There you should see a message that reads `Can "Upgrade" only to "Websocket".`.
-
-Now you should be able to get network connectivity in the virtual machine. If you are restoring from a saved state, you might need to first run:
-```sh
-ip link set enp0s5 down
-rmmod ne2k-pci
-```
-
-To bring the network up, run:
-```sh
-modprobe ne2k-pci
-dhcpcd -w4 enp0s5
-```
-
-It might take a while for a carrier to become available on the interface. If the `dhcpcd` command fails shortly after booting, wait a bit and try again a bit later. If you are using the 9p network filesystem you can use the developer tools networking tab (in chrome) to get a sense of what is going on by looking at the files that are being downloaded.
-
-When the network is up you should be able to curl a website. To check, run `curl icanhazip.com`. There you should see the public IP of the machine running the proxy.
-
-You can't do inbound traffic into the VM with the websockproxy Docker container because it uses a basic NAT. To SSH into the VM running in the browser, you can create a reverse SSH tunnel to expose the SSH port of the sshd in the VM to the outside world. You may need to start `sshd` first, it may also be reasonable to change root password:
-
-```sh
-passwd root
-systemctl start sshd
-```
-
-then create a reverse SSH tunnel:
-
-```sh
-# This will create a port 1122 on the example.com server
-# which forwards to the SSH in the VM
-ssh root@example.com -R 1122:localhost:22
-```
-
-Now on the `example.com` server you should be able to SSH into your browser tab by running `ssh root@localhost -p 1122`.
