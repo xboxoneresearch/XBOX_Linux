@@ -1,4 +1,5 @@
 .vs
+.csproj.user
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
