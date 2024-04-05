@@ -1,0 +1,88 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap4="http://schemas.microsoft.com/appx/manifest/uap/windows10/4"
+  xmlns:iot="http://schemas.microsoft.com/appx/manifest/iot/windows10"
+  xmlns:uap2="http://schemas.microsoft.com/appx/manifest/uap/windows10/2"
+  xmlns:uap6="http://schemas.microsoft.com/appx/manifest/uap/windows10/6"
+  IgnorableNamespaces="uap mp uap3 uap4 iot uap2 uap6">
+
+  <Identity
+    Name="cf8e5303-17c6-4a4b-abf3-e18ec68f5cde"
+    Publisher="CN=lllsondowlll"
+    Version="1.0.0.0" />
+
+  <mp:PhoneIdentity PhoneProductId="cf8e5303-17c6-4a4b-abf3-e18ec68f5cde" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+
+  <Properties>
+    <DisplayName>Xbox_Linux</DisplayName>
+    <PublisherDisplayName>lllsondowlll</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.0.0" MaxVersionTested="10.0.0.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="x-generate"/>
+  </Resources>
+
+  <Applications>
+    <Application Id="App"
+      Executable="$targetnametoken$.exe"
+      EntryPoint="Xbox_Linux.App">
+      <uap:VisualElements
+        DisplayName="Xbox_Linux"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png"
+        Description="Xbox_Linux"
+        BackgroundColor="transparent">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png"/>
+        <uap:SplashScreen Image="Assets\SplashScreen.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClientServer"/>
+    <uap:Capability Name="videosLibrary"/>
+    <uap3:Capability Name="userNotificationListener"/>
+    <uap4:Capability Name="userDataTasks"/>
+    <uap:Capability Name="userAccountInformation"/>
+    <iot:Capability Name="systemManagement"/>
+    <uap2:Capability Name="spatialPerception"/>
+    <uap:Capability Name="sharedUserCertificates"/>
+    <uap:Capability Name="removableStorage"/>
+    <uap3:Capability Name="remoteSystem"/>
+    <Capability Name="privateNetworkClientServer"/>
+    <uap:Capability Name="picturesLibrary"/>
+    <uap2:Capability Name="phoneCallHistoryPublic"/>
+    <uap:Capability Name="phoneCall"/>
+    <uap4:Capability Name="offlineMapsManagement"/>
+    <uap:Capability Name="objects3D"/>
+    <uap:Capability Name="musicLibrary"/>
+    <iot:Capability Name="lowLevelDevices"/>
+    <Capability Name="internetClient"/>
+    <uap6:Capability Name="graphicsCapture"/>
+    <uap:Capability Name="enterpriseAuthentication"/>
+    <uap:Capability Name="contacts"/>
+    <Capability Name="codeGeneration"/>
+    <uap:Capability Name="chat"/>
+    <uap:Capability Name="blockedChatMessages"/>
+    <uap3:Capability Name="backgroundMediaPlayback"/>
+    <uap:Capability Name="appointments"/>
+    <Capability Name="allJoyn"/>
+    <DeviceCapability Name="proximity"/>
+    <DeviceCapability Name="pointOfService"/>
+    <DeviceCapability Name="microphone"/>
+    <DeviceCapability Name="lowLevel"/>
+    <DeviceCapability Name="location"/>
+    <DeviceCapability Name="gazeInput"/>
+    <DeviceCapability Name="bluetooth"/>
+  </Capabilities>
+</Package>
