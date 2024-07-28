@@ -1,0 +1,55 @@
+name: Build UWP Package
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Set up NuGet
+      uses: NuGet/setup-nuget@v2
+
+    - name: Extract version string from AppxManifest
+      id: extract_version
+      run: |
+        $manifest = [xml](Get-Content uwp\XboxLinux\Package.appxmanifest)
+        $version = $manifest.Package.Identity.Version
+        echo $version
+        echo version=$version >> $env:GITHUB_OUTPUT
+        
+    - name: Echo the GitHub Env for File Names
+      run: |
+       echo "${{ steps.extract_version.outputs.version }}"
+    - name: Restore NuGet packages
+      run: nuget restore uwp\XboxLinux\XboxLinux.sln
+
+    - name: Build the project
+      run: msbuild uwp\XboxLinux\XboxLinux.sln /t:Restore,Rebuild /p:Configuration=Release /p:Platform=x64
+  
+    - name: Build MSIX
+      run: |
+          & 'C:/Program Files (x86)/Windows Kits/10/bin/10.0.22621.0/x64/makeappx.exe' encrypt /p uwp\XboxLinux\AppPackages\XboxLinux_${{ steps.extract_version.outputs.version }}_Test\XboxLinux_${{ steps.extract_version.outputs.version }}_x64.msixbundle /ep "xboxlinux_${{ steps.extract_version.outputs.version }}.emsixbundle" /kt
+   
+    - name: Upload unencrypted MSIX
+      uses: actions/upload-artifact@v4
+      with:
+        name: unencrypted-msix
+        path: "uwp\\XboxLinux\\AppPackages\\XboxLinux_${{ steps.extract_version.outputs.version }}_Test\\XboxLinux_${{ steps.extract_version.outputs.version }}_x64.msixbundle"
+
+    - name: Upload encrypted EMSIXBundle
+      uses: actions/upload-artifact@v4
+      with:
+        name: encrypted-emsixbundle
+        path: "xboxlinux_${{ steps.extract_version.outputs.version }}.emsixbundle"

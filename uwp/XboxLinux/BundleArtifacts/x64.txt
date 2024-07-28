@@ -1,0 +1,2 @@
+MainPackage=C:\Users\xster\Source\Repos\XBOX_Linux\uwp\Xbox Linux\bin\x64\Release\Xbox Linux_1.0.0.0_x64.msix
+SymbolPackage=C:\Users\xster\Source\Repos\XBOX_Linux\uwp\Xbox Linux\obj\x64\Release\Symbols\Xbox Linux_1.0.0.0_x64.appxsym
