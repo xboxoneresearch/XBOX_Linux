@@ -147,6 +147,7 @@
     <None Include="Virtual_Machines\libv86.js">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="XboxLinux_TemporaryKey.pfx" />
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml">
@@ -166,7 +167,7 @@
       <Version>2.8.6</Version>
     </PackageReference>
     <PackageReference Include="Microsoft.Web.WebView2">
-      <Version>1.0.2420.47</Version>
+      <Version>1.0.2592.51</Version>
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
